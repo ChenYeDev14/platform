@@ -6,6 +6,7 @@
  void NormalBattle::start_normal_battle(QString side1, QString side2, QString map)
 {
     human = -1;
+    debug = -1;
     ai[0] = side1;
     ai[1] = side2;
     map_location = map;
@@ -15,6 +16,8 @@
     {
         if (ai[0] == "\\\human")
             human = 0;
+        else if (ai[0] == "\\\debug")
+            debug = 0;
         else
         {
             emit path_error(1);
@@ -26,6 +29,8 @@
     {
         if (ai[1] == "\\\human")
             human = 1;
+        else if (ai[1] == "\\\debug")
+            debug = 1;
         else
         {
             emit path_error(2);
@@ -44,10 +49,12 @@
 
  void NormalBattle::run()
  {
-     if (human == -1) StartTwoAiBattle(); else StartHumanAiBattle();
+     if (human == -1 && debug == -1) StartTwoAiBattle();
+     else if (debug == -1) StartHumanAiBattle();
+     else StartDebugBattle();
  }
 
- void NormalBattle::StartHumanAiBattle()
+ void NormalBattle::StartDebugBattle()
  {
      //初始化管道
     //处理初始化服务端。
@@ -62,9 +69,9 @@
     QLocalSocket* client[2];
 
     //连接ai及界面
-    process.start(ai[!human], listen_name[!human]);
+    process.start(ai[!debug], listen_name[!debug]);
     process.waitForStarted();
-    emit ready_for_connect(listen_name[human]);
+    emit ready_for_connect(listen_name[debug]);
 
  }
 
@@ -110,4 +117,9 @@
         client[i]->waitForConnected();
     }
     Battle();
+ }
+
+ void NormalBattle::Battle()
+ {
+
  }
