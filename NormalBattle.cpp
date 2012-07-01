@@ -9,7 +9,7 @@
     ai[0] = side1;
     ai[1] = side2;
     map_location = map;
-    检查三个文件地址是否指向一个正确的文件
+    //检查三个文件地址是否指向一个正确的文件
     QFile file(ai[0]);
     if (!file.exists())
     {
@@ -66,17 +66,21 @@
     process.waitForStarted();
     emit ready_for_connect(listen_name[human]);
 
-    for (int i=0; i<2; i++)
-    {
-        if (!server[i].waitForNewConnection(5000,timeout))
-        {//等待五秒，若未能连接则返回错误并终止程序
-            emit connect_error(i+1);
-            return;
-        }
-        client[i] = server[i].nextPendingConnection();
-        client[i]->waitForConnected();
-    }
-    Battle();
+ }
+
+ void NormalBattle::connect()
+ {
+     for (int i=0; i<2; i++)
+     {
+         if (!server[i].waitForNewConnection(5000,timeout))
+         {//等待五秒，若未能连接则返回错误并终止程序
+             emit connect_error(i+1);
+             return;
+         }
+         client[i] = server[i].nextPendingConnection();
+         client[i]->waitForConnected();
+     }
+     Battle();
  }
 
  void NormalBattle::StartTwoAiBattle()
@@ -85,8 +89,10 @@
     //处理初始化服务端。
     QTime time = QTime::currentTime();
     QLocalServer server[2];
-    server[0].listen("THUEESASTTEAM14"+time.toString("hh"));
-    server[1].listen("THUEESASTTEAM14"+time.toString("ss"));
+    QString listen_name[2] = {QString("THUEESASTTEAM14"+time.toString("hh")),
+                              QString("THUEESASTTEAM14"+time.toString("ss"))};
+    server[0].listen(listen_name[0]);
+    server[1].listen(listen_name[1]);
 
     QProcess process[2];
     QLocalSocket* client[2];
@@ -94,12 +100,7 @@
     //连接ai
     for (int i=0;i<2;i++)
     {
-        if (i==0)
-            process[i].start(ai[i],QStringList() << time.toString("hh"));
-        else
-            process[i].start(ai[i],QStringList() << time.toString("ss"));
-
-        process[i].waitForStarted();
+        process[i].start(ai[i],listen_name[i]);
         if (!server[i].waitForNewConnection(3000,timeout))
         {//等待三秒，若未能连接则返回错误并终止程序
             emit connect_error(i+1);
