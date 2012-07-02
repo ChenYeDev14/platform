@@ -3,8 +3,21 @@
 #include <QLocalServer>
 #include <QLocalSocket>
 
+void NormalBattle::change_to_debug_mode()
+{
+    if (debug == -1) return;
+    debug_mode = true;
+}
+
+void NormalBattle::change_to_run_mode()()
+{
+    if (debug == -1) return;
+    debug_mode == false;
+}
+
  void NormalBattle::start_normal_battle(QString side1, QString side2, QString map)
 {
+    debug_mode = false;
     human = -1;
     debug = -1;
     ai[0] = side1;

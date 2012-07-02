@@ -13,6 +13,7 @@ private:
     bool is_stoped;
     int human; //人机对战时值代表人的一方，若是双Ai对战，值为-1
     int debug; //调试模式时代表需调试Ai一方，否则为-1
+    bool debug_mode;
 
 //    Replay replay;
     void StartTwoAiBattle();
@@ -33,6 +34,10 @@ public slots:
     void start_normal_battle(QString side1, QString side2, QString map);//开始对战，side1,side2为Ai路径，map为地图路径
     void connect();
     void stop();            //提供终止线程的接口
+    void change_to_debug_mode();    //debugger中转换至调试模式（对exe方的数据请求不予满足，等到调试方请求数据时一起发放），
+                                    //且回合停止计数（除非某一方有指令待执行）
+                                    //这是为了满足选手暂停下来进行单步调试的需求
+    void change_to_run_mode();      //切换回运行模式
 
 signals:
     void path_error(int );  //当文件地址错误时被发送，0代表地图地址错误，1、2分别代表ai地址错误
