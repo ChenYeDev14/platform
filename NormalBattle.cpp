@@ -15,7 +15,7 @@ void NormalBattle::change_to_run_mode()()
     debug_mode == false;
 }
 
- void NormalBattle::start_normal_battle(QString side1, QString side2, QString map)
+ void NormalBattle::StartNormalBattle(QString side1, QString side2, QString map)
 {
     debug_mode = false;
     human = -1;

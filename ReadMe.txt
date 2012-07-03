@@ -3,7 +3,7 @@
 
 Ai对战：
 用户输入两个Ai的路径QString side1,side2 以及地图的路径QString map，
-确定键的单击信号关联到 NormalBattle 对象的槽:SLOT(start_normal_battle(side1, side2, map))
+开始战争：NormalBattle::StartNormalBattle(side1, side2, map))
 处理显示NormalBattle对象发出的各种消息：SIGNAL(path_error(int ));  //当文件地址错误时被发送，0代表地图地址错误，1、2分别代表ai地址错误
    					SIGNAL(connect_error(int )); //当ai管道连接出错时被发送，1,2分别代表两个ai
     					SIGNAL(send_winner(int));   //判断胜利方, winner = 0 代表1号选手获胜，winner =1 代表2号选手获胜, winner = 2代表战斗平局
@@ -14,8 +14,8 @@ Ai对战：
 
 Debbuger(这个做得漂亮点，以后可以直接发给选手）：
 用户输入一个Ai（exe)的路径QString exe_side，选择需要调试的Ai的side，以及地图的路径QString map，
-单击“开始调试”，连接到槽：SLOT(start_normal_battle(QString("\\\debug"), exe_side, map)) 
-		       或者 SLOT(start_normal_battle(exe_side, QString("\\\debug"), map))  //根据用户选的side确定
+单击“开始调试”，NormalBattle::StartNormalBattle(QString("\\\debug"), exe_side, map)) 
+  	      或者NormalBattle::StartNormalBattle(exe_side, QString("\\\debug"), map))  //根据用户选的side确定
 
 模式切换（运行/调试），初始为运行模式
 		切换至调试模式：SLOT(change_to_debug_mode())

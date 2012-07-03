@@ -29,9 +29,11 @@ protected:
 public:
 
     QString GetReplayPath();
+    void StartNormalBattle(QString side1, QString side2, QString map);//开始对战，side1,side2为Ai路径，map为地图路径
+
 
 public slots:
-    void start_normal_battle(QString side1, QString side2, QString map);//开始对战，side1,side2为Ai路径，map为地图路径
+
     void connect();
     void stop();            //提供终止线程的接口
     void change_to_debug_mode();    //debugger中转换至调试模式（对exe方的数据请求不予满足，等到调试方请求数据时一起发放），
