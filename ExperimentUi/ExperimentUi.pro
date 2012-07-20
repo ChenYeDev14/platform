@@ -17,12 +17,17 @@ TEMPLATE = app
 SOURCES += main.cpp\
         mainwindow.cpp \
     ../NetBattle.cpp \
-    ../NormalBattle.cpp
+    ../NormalBattle.cpp \
+    ../replayfile.cpp
 
 HEADERS  += mainwindow.h \
     ../NetBattle.h \
     ../NormalBattle.h \
     ../NetBattle.h \
-    ../NormalBattle.h
+    ../NormalBattle.h \
+    ../Status.h \
+    ../Logic.h \
+    ../Basic.h \
+    ../replayfile.h
 
 FORMS    += mainwindow.ui
