@@ -5,6 +5,9 @@
 #include "Status.h"
 #include <QString>
 
+
+class QFile;
+
 namespace DS14
 {
 class ReplayFile
@@ -23,6 +26,8 @@ public:
     void ReadInitialInfo(PlayerInfo &playerInfo1, PlayerInfo &playerInfo2, StatusMapInfo &mapInfo); //读出初始信息
     void ReadAllRoundInfo(int &roundNum, Status *statusList[]); //读出所有回合信息,statusList[]为指针数组，采用动态分配内存
     void ReadWinner(int &winSide);
+private:
+    QFile* file;
 };
 }
 

@@ -17,22 +17,38 @@ class AiReadWriteThread : public QThread
 {
     Q_OBJECT
 private:
-    QLocalSocket *client;
+    //QProcess *process;
+    //QLocalSocket *client;
+    //QLocalServer *server;
     PlayerCommand *aiCommand;
+    QString listen_name, ai;
+    int init_state;
+    PlayerInfo playerInfo;
+    bool ter;
+
     bool writeAlready;   //这一回合是否已给Ai写入过gameInfo
     bool requested;      //一回合中Ai第二次申请游戏信息时只为true，下一回合一开始即发放游戏信息
     bool stoped;         //暂停读写保证平台安全提交选手指令
     bool reading;        //是否正与Ai交互
     GameInfo gInfo;
+
+
 public:
-    AiReadWriteThread(QLocalSocket *cl, const GameInfo &initInfo) :
-        client(cl), gInfo(initInfo), aiCommand(NULL), requested(false), writeAlready(false), stoped(false) {}
+    AiReadWriteThread(QString listenName, QString aiPath) :
+         listen_name(listenName), ai(aiPath), init_state(0), ter(false),
+         aiCommand(NULL), requested(false), writeAlready(false), stoped(true) {}
     ~AiReadWriteThread();
+    void Ter() {ter = true;}
     PlayerCommand *getCommand() {return aiCommand;}
+
+    bool readPlayerInfo(PlayerInfo &pInfo);
     void reset(const GameInfo &ngInfo);
     void waitForReadingCompeleted();
 protected:
     void run();
+signals:
+    void connectError();
+
 };
 
 
@@ -51,12 +67,13 @@ private:
     QString ai[2];//ai地址
     QString map_location;//地图地址
     bool is_stoped;
-    bool game_over;
     int human; //人机对战时值代表人的一方，若是双Ai对战，值为-1
     int debug; //调试模式时代表需调试Ai一方，否则为-1
     bool debug_mode;
    // int timerID;
     int roundTime;
+    bool debugAiStarted;
+
 
     void StartTwoAiBattle();
     void StartHumanAiBattle();
@@ -64,7 +81,7 @@ private:
     void InitAiInfo();
     int WhetherWin(const Status &state); //判断是否有一方赢，若ai1赢，返回1，ai2赢，返回2，若游戏继续，返回0，若游戏已结束但是为平局,返回3
     void UpDateCommand(PlayerCommand *c1, PlayerCommand *c2);
-    void RoundTimer(); //回合节点
+    bool RoundTimer(); //回合节点，返回游戏是否结束
 
 protected:
     void run();
@@ -86,6 +103,14 @@ public slots:
                                     //且回合停止计数（除非某一方有指令待执行）
                                     //这是为了满足选手暂停下来进行单步调试的需求
     void change_to_run_mode();      //切换回运行模式
+
+
+
+private slots:
+    void send_connect_error1()  {emit connect_error(1);}
+    void send_connect_error2()  {emit connect_error(2);}
+    void send_init_error1() {emit init_error(1);}
+    void send_init_error2() {emit init_error(2);}
 
 signals:
     void path_error(int );      //当文件地址错误时被发送，0代表地图地址错误，1、2分别代表ai地址错误

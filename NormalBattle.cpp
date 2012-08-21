@@ -5,15 +5,16 @@
 #include <QProcess>
 #include <QFile>
 #include <QFileInfo>
+#include <wchar.h>
 
 using namespace DS14;
 NormalBattle::NormalBattle()
 {
-    roundTime = 1;
+    roundTime = 10;
     for (int i=0; i<2; i++)
     {
-        server[i] = new QLocalServer;
-        process[i] = new QProcess;
+        server[i] = NULL;
+        process[i] = NULL;
         aiThread[i] = NULL;
     }
 }
@@ -72,6 +73,7 @@ void NormalBattle::StartNormalBattle(QString side1, QString side2, QString map)
         emit path_error(0);
         return ;
     }
+    debugAiStarted = false;
     terminate();
     start();
 }
@@ -116,7 +118,7 @@ void NormalBattle::InitAiInfo()
     {
         if (!client[i]->waitForReadyRead())
         {
-            for (int j=0; j<2; j++) process[j]->terminate();
+            for (int j=0; j<2; j++) process[j]->kill();
             emit init_error(i+1);
         }
         client[i]->read((char*)&pInfo[i], sizeof(PlayerInfo));
@@ -137,8 +139,15 @@ void NormalBattle::StartDebugBattle()
 {
     //初始化管道
    //处理初始化服务端。
+    for (int i=0; i<2; i++)
+    {
+        if (server[i] != NULL) delete server[i];
+        server[i] = new QLocalServer;
+        if (process[i] != NULL) delete process[i];
+        process[i] = new QProcess;
+    }
    QTime time = QTime::currentTime();
-   QString listen_name[2] = {QString(time.toString("hh-")),
+   QString listen_name[2] = {QString(time.toString("mm-ss")),
                              QString(time.toString("ss"))};
    server[0]->listen("DS14"+listen_name[0]);
    server[1]->listen("DS14"+listen_name[1]);
@@ -147,96 +156,100 @@ void NormalBattle::StartDebugBattle()
    process[!debug]->start(ai[!debug], QStringList()<<listen_name[!debug]);
    process[!debug]->waitForStarted();
    emit ready_for_connect(listen_name[debug]); //发送管道名，显示给选手，选手手动输入Ai.exe后，通过调试器调用NormalBattle::connect进行连接
+
+   while (!debugAiStarted);
+
+   for (int i=0; i<2; i++)
+   {
+       if (!server[i]->waitForNewConnection(3000))
+       {//等待三秒，若未能连接则返回错误并终止程序
+           process[!debug]->terminate();
+           emit connect_error(i+1);
+           return;
+       }
+       client[i] = server[i]->nextPendingConnection();
+       client[i]->waitForConnected();
+   }
+
+   //开始对战
+   InitAiInfo();
+   char f;
+   PlayerCommand *command[2];
+   command[0] = NULL;
+   command[1] = NULL;
+
+   time.start();
+   while (true)
+   {
+       if (debug_mode)     //单步调试模式
+       {
+           client[debug]->waitForReadyRead(-1);
+           client[debug]->read(&f, sizeof(f));
+           if (f == 'r')
+           {
+               GameInfo gInfo = _logic->toPlayer(debug);
+               client[debug]->write((char*)&gInfo, sizeof(gInfo));
+           }
+           else if (f == 'w')
+           {
+               command[debug] = new PlayerCommand;
+               client[debug]->waitForReadyRead(-1);
+               client[debug]->read((char*)command[debug], sizeof(PlayerCommand));
+           }
+
+           client[!debug]->waitForReadyRead(-1);
+           client[!debug]->read(&f, sizeof(f));
+           if (f == 'r')
+           {
+               GameInfo gInfo = _logic->toPlayer(!debug);
+               client[!debug]->write((char*)&gInfo, sizeof(gInfo));
+           }
+           else if (f == 'w')
+           {
+               command[!debug] = new PlayerCommand;
+               client[!debug]->waitForReadyRead(-1);
+               client[!debug]->read((char*)command[!debug], sizeof(PlayerCommand));
+           }
+
+           if (command[0] != NULL || command[1] != NULL)
+           {
+               UpDateCommand(command[0], command[1]);
+               command[0] = NULL;
+               command[1] = NULL;
+               time.restart();
+           }
+       }
+       else    //非单步调试，正常运行
+       {
+           for (int i=0; i<2; i++)
+               if (client[i]->waitForReadyRead(0))
+               {
+                   if (f == 'r')
+                   {
+                       GameInfo gInfo = _logic->toPlayer(i);
+                       client[i]->write((char*)&gInfo, sizeof(gInfo));
+                   }
+                   else if (f == 'w')
+                   {
+                       if (command[i] == NULL) command[i] = new PlayerCommand;
+                       client[i]->waitForReadyRead(-1);
+                       client[i]->read((char*)command[i], sizeof(PlayerCommand));
+                   }
+               }
+           if (time.elapsed() >= roundTime)
+           {
+               UpDateCommand(command[0], command[1]);
+               command[0] = NULL;
+               command[1] = NULL;
+               time.restart();
+           }
+       }
+   }
 }
 
 void NormalBattle::ready_connect()
 {
-    for (int i=0; i<2; i++)
-    {
-        if (!server[i]->waitForNewConnection(3000))
-        {//等待三秒，若未能连接则返回错误并终止程序
-            process[!debug]->terminate();
-            emit connect_error(i+1);
-            return;
-        }
-        client[i] = server[i]->nextPendingConnection();
-        client[i]->waitForConnected();
-    }
-
-    //开始对战
-    InitAiInfo();
-    char f;
-    PlayerCommand *command[2];
-    command[0] = NULL;
-    command[1] = NULL;
-    QTime time;
-    time.start();
-    while (true)
-    {
-        if (debug_mode)     //单步调试模式
-        {
-            client[debug]->waitForReadyRead(-1);
-            client[debug]->read(&f, sizeof(f));
-            if (f == 'r')
-            {
-                GameInfo gInfo = _logic->toPlayer(debug);
-                client[debug]->write((char*)&gInfo, sizeof(gInfo));
-            }
-            else if (f == 'w')
-            {
-                command[debug] = new PlayerCommand;
-                client[debug]->waitForReadyRead(-1);
-                client[debug]->read((char*)command[debug], sizeof(PlayerCommand));
-            }
-
-            client[!debug]->waitForReadyRead(-1);
-            client[!debug]->read(&f, sizeof(f));
-            if (f == 'r')
-            {
-                GameInfo gInfo = _logic->toPlayer(!debug);
-                client[!debug]->write((char*)&gInfo, sizeof(gInfo));
-            }
-            else if (f == 'w')
-            {
-                command[!debug] = new PlayerCommand;
-                client[!debug]->waitForReadyRead(-1);
-                client[!debug]->read((char*)command[!debug], sizeof(PlayerCommand));
-            }
-
-            if (command[0] != NULL || command[1] != NULL)
-            {
-                UpDateCommand(command[0], command[1]);
-                command[0] = NULL;
-                command[1] = NULL;
-                time.restart();
-            }
-        }
-        else    //非单步调试，正常运行
-        {
-            for (int i=0; i<2; i++)
-                if (client[i]->waitForReadyRead(0))
-                {
-                    if (f == 'r')
-                    {
-                        GameInfo gInfo = _logic->toPlayer(i);
-                        client[i]->write((char*)&gInfo, sizeof(gInfo));
-                    }
-                    else if (f == 'w')
-                    {
-                        if (command[i] == NULL) command[i] = new PlayerCommand;
-                        client[i]->waitForReadyRead(-1);
-                        client[i]->read((char*)command[i], sizeof(PlayerCommand));
-                    }
-                }
-            if (time.elapsed() >= roundTime)
-            {
-                UpDateCommand(command[0], command[1]);
-                command[0] = NULL;
-                command[1] = NULL;
-                time.restart();
-            }
-        }
-    }
+    debugAiStarted = true;
 }
 
 void NormalBattle::UpDateCommand(PlayerCommand *c1, PlayerCommand *c2)
@@ -269,7 +282,7 @@ void NormalBattle::change_to_debug_mode()
 void NormalBattle::change_to_run_mode()
 {
     if (debug == -1) return;
-    debug_mode == false;
+    debug_mode = false;
 }
 
 
@@ -291,47 +304,67 @@ void NormalBattle::StartTwoAiBattle()
     //初始化管道
     //处理初始化服务端。
    QTime time = QTime::currentTime();
-   QString listen_name[2] = {QString(time.toString("hh-")),
+   QString listen_name[2] = {QString(time.toString("mm-ss")),
                              QString(time.toString("ss"))};
-   if (server[0]->isListening()) server[0]->close();
-   if (server[1]->isListening()) server[1]->close();
-   server[0]->listen("DS14"+listen_name[0]);
-   server[1]->listen("DS14"+listen_name[1]);
+   PlayerInfo pInfo[2];
+   int l = wcslen(pInfo[0].teamName);
 
 
-   //连接ai
-   for (int i=0;i<2;i++)
-   {
-       process[i]->start(ai[i],QStringList()<<listen_name[i]);
-       process[i]->waitForStarted(-1);
-       if (!server[i]->waitForNewConnection(3000))
-       {//等待三秒，若未能连接则返回错误并终止程序
-           for (int j=0; j<2; j++) process[j]->kill();
-           emit connect_error(i+1);
-           return;
-       }
-       client[i] = server[i]->nextPendingConnection();
-       client[i]->waitForConnected();
-   }
-   //开始对战
-   InitAiInfo();
    for (int i=0; i<2; i++)
    {
-       aiThread[i] = new AiReadWriteThread(client[i], _logic->toPlayer(i+1));
-       aiThread[i]->start();
+       if (aiThread[i] != NULL) delete aiThread[i];
+       aiThread[i] = new AiReadWriteThread(listen_name[i], ai[i]);
    }
-   game_over = false;
+   connect(aiThread[0], SIGNAL(connectError()), this, SLOT(send_connect_error1()));
+
+   connect(aiThread[1], SIGNAL(connectError()), this, SLOT(send_connect_error2()));
+
+   aiThread[0]->start();
+   aiThread[1]->start();
+   for (int i=0; i<2; i++)
+   {
+       if (!aiThread[i]->readPlayerInfo(pInfo[i]))
+       {
+           emit init_error(i);
+           for(int j=0; j<2; j++) aiThread[j]->Ter();
+           return;
+       }
+
+   }
+
+   QString playerName[2];
+   for (int i=0; i<2; i++)
+   {
+       playerName[i] = playerName[i].fromWCharArray(pInfo[i].teamName);
+   }
+
+   _logic = new logic;
+   _logic->init(map_location.toStdString());
+   QFileInfo mapFile(map_location);
+   rFile = new ReplayFile;
+   rFile->NewFile(playerName[0], playerName[1], mapFile.baseName());
+
+   //开始对战
+   for (int i=0; i<2; i++)
+   {
+        aiThread[i]->reset(_logic->toPlayer(i+1));
+
+   }
+   bool game_over = false;
    time.start();
    while(true && !game_over)
+   {
+       int t = time.elapsed();
        if (time.elapsed() >= roundTime)
        {
-           RoundTimer();
+           game_over = RoundTimer();
            time.restart();
        }
+   }
 }
 
 
-void NormalBattle::RoundTimer()
+bool NormalBattle::RoundTimer()
 {
     if (_logic->getStatus().roundNumber % 2)
     {
@@ -345,30 +378,29 @@ void NormalBattle::RoundTimer()
     }
     _logic->update(aiThread[0]->getCommand(), aiThread[1]->getCommand());
     Status state = _logic->getStatus();
-    emit round(state.roundNumber);
+    if (state.roundNumber % 10 == 0) emit round(state.roundNumber);
     rFile->WriteRoundInfo(state);
     int winner = WhetherWin(state);
     if (winner)
     {
-        game_over = true;
         rFile->WriteWinner(winner);
         emit send_winner(winner);
         for (int i=0; i<2; i++)
         {
-            aiThread[i]->terminate();
-            process[i]->kill();
-        }
+            aiThread[i]->Ter();
+         }
         //killTimer(timerID);
         delete _logic;
         _logic = NULL;
         delete rFile;
         rFile = NULL;
-        return;
+        return true;
     }
     for (int i=0; i<2; i++)
     {
         aiThread[i]->reset(_logic->toPlayer(i+1));
     }
+    return false;
 }
 
 void NormalBattle::stop()
@@ -377,7 +409,7 @@ void NormalBattle::stop()
     for (int i=0; i<2; i++)
         if (aiThread[i] != NULL)
         {
-            aiThread[i]->terminate();
+            aiThread[i]->Ter();
             delete aiThread[i];
             aiThread[i] = NULL;
         }
@@ -389,15 +421,39 @@ void NormalBattle::stop()
 
 void AiReadWriteThread::run()
 {
-    while (true)
+    QLocalServer server;
+    server.listen("DS14"+listen_name);
+    //运行AI
+    QProcess process;
+    process.start(ai, QStringList() << listen_name);
+    process.waitForStarted(-1);
+    //连接
+    if (!server.waitForNewConnection(3000))
+    {
+        emit connectError();
+        return;
+    }
+    QLocalSocket *client = server.nextPendingConnection();
+    client->waitForConnected(-1);
+    //读入初始信息
+
+    if (!client->waitForReadyRead())
+    {
+        init_state = 2;
+        return;
+    }
+    client->read((char*)&playerInfo, sizeof(playerInfo));
+    init_state = 1;
+    while (!ter)
     {
         reading = false;
-        client->waitForReadyRead(-1);
-        char f;
+        while (!ter && !requested && !client->waitForReadyRead(1));
+        if (ter) break;
+        char f = ' ';
         if (!stoped)
         {
             reading = true;
-            client->read(&f, sizeof(f));
+            if (!requested) client->read(&f, sizeof(f));
             if (f == 'r' || requested)
             {
                 if (!writeAlready)
@@ -416,6 +472,7 @@ void AiReadWriteThread::run()
             }
         }
     }
+    process.kill();
 }
 
 void AiReadWriteThread::waitForReadingCompeleted()
@@ -433,9 +490,18 @@ void AiReadWriteThread::reset(const GameInfo &ngInfo)
     stoped = false;
 }
 
+bool AiReadWriteThread::readPlayerInfo(PlayerInfo &pInfo)
+{
+    while (!init_state);
+    if (init_state == 2) return false;
+    pInfo = playerInfo;
+    return true;
+}
+
 AiReadWriteThread::~AiReadWriteThread()
 {
     if (aiCommand != NULL) delete aiCommand;
+    aiCommand = NULL;
 }
 
 
